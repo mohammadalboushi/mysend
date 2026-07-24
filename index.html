@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>إرسال عن بعد - MySend</title>
+    <meta name="theme-color" content="#050515">
+    
+    <!-- مكتبات الفايربيس -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        
+        * { box-sizing: border-box; font-family: 'Cairo', sans-serif; }
+        
+        body { 
+            margin: 0; 
+            min-height: 100vh; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            background: linear-gradient(-45deg, #050515, #001855, #0a0f25, #000c28);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            color: white; 
+            padding: 20px;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 450px;
+            z-index: 10;
+        }
+
+        .header { 
+            text-align: center; 
+            margin-bottom: 30px; 
+        }
+        
+        .header img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 15px;
+            border-radius: 20px;
+            box-shadow: 0 10px 20px rgba(0,230,118,0.2);
+        }
+
+        .header h1 { 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 900;
+            background: linear-gradient(90deg, #00E676, #00B0FF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .card {
+            background: rgba(25, 30, 50, 0.6);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.5);
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 30px 55px rgba(0, 230, 118, 0.1);
+        }
+
+        label { 
+            display: block; 
+            color: #A0AABF; 
+            font-size: 14px; 
+            margin-bottom: 10px; 
+            font-weight: 700;
+        }
+        
+        input[type="text"], input[type="password"], input[type="tel"] {
+            width: 100%;
+            padding: 16px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 20px;
+            font-size: 16px;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: #00E676;
+            box-shadow: 0 0 10px rgba(0,230,118,0.3);
+        }
+        
+        #pinInput { 
+            text-align: center; 
+            font-size: 32px; 
+            letter-spacing: 10px; 
+            font-weight: 900; 
+            color: #FFCA28;
+            direction: ltr;
+        }
+
+        button, .file-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            display: block;
+        }
+
+        .btn-green { 
+            background: linear-gradient(90deg, #00E676, #00C853); 
+            color: #050515; 
+        }
+        .btn-green:hover { box-shadow: 0 0 15px rgba(0,230,118,0.5); transform: translateY(-2px); }
+        
+        .btn-blue { 
+            background: linear-gradient(90deg, #0057D9, #0044AD); 
+            color: white; 
+            margin-bottom: 20px; 
+        }
+        .btn-blue:hover { box-shadow: 0 0 15px rgba(0,87,217,0.5); transform: translateY(-2px); }
+        
+        .btn-yellow { 
+            background: linear-gradient(90deg, #FFCA28, #FFB300); 
+            color: #050515; 
+        }
+        .btn-yellow:hover:not(:disabled) { box-shadow: 0 0 15px rgba(255,202,40,0.5); transform: translateY(-2px); }
+
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        input[type="file"] { display: none; }
+        
+        #statusText { text-align: center; margin-top: 15px; font-size: 15px; font-weight: 700; height: 20px;}
+        #fileName { text-align: center; color: #A0AABF; margin-bottom: 20px; font-size: 14px; word-break: break-all; }
+
+        .progress-wrapper {
+            width: 100%;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-bg {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00E676, #00B0FF);
+            width: 0%;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 8px;
+            color: #00E676;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <!-- رح يستدعي الأيقونة تبعك مباشرة -->
+        <img src="icon-192.png" alt="MySend Logo" onerror="this.style.display='none'">
+        <h1>MySend Web</h1>
+    </div>
+
+    <!-- قسم الربط -->
+    <div class="card" id="step1">
+        <label>أدخل رمز الـ PIN الظاهر على التلفزيون أو الهاتف:</label>
+        <input type="tel" id="pinInput" placeholder="****" maxlength="4" autocomplete="off">
+        <button class="btn-green" id="btnVerify" onclick="verifyPin()">ربط الجهاز</button>
+        <div id="statusText"></div>
+    </div>
+
+    <!-- قسم الإرسال -->
+    <div class="card" id="step2" style="display: none;">
+        <label>كلمة المرور (إن وجدت بالهاتف):</label>
+        <input type="password" id="passInput" placeholder="اتركه فارغاً إذا لم يكن هناك حماية">
+        
+        <label for="fileInput" class="file-btn btn-blue">اختر ملفاً للإرسال</label>
+        <input type="file" id="fileInput">
+        <div id="fileName">لم يتم اختيار أي ملف بعد</div>
+
+        <div class="progress-wrapper" id="progressWrapper">
+            <div class="progress-bg"><div class="progress-bar" id="progressBar"></div></div>
+            <div class="progress-text" id="progressText">0%</div>
+        </div>
+
+        <button class="btn-yellow" id="btnSend" onclick="sendFile()" disabled>إرسال الآن</button>
+    </div>
+</div>
+
+<script>
+    // 1. توليد Manifest برمجياً بالاعتماد على أيقوناتك
+    const manifestObj = {
+        "name": "MySend Remote",
+        "short_name": "MySend",
+        "start_url": ".",
+        "display": "standalone",
+        "background_color": "#050515",
+        "theme_color": "#050515",
+        "orientation": "portrait",
+        "icons": [
+            { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+        ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
+    const manifestUrl = URL.createObjectURL(manifestBlob);
+    const linkManifest = document.createElement('link');
+    linkManifest.rel = 'manifest';
+    linkManifest.href = manifestUrl;
+    document.head.appendChild(linkManifest);
+
+    // 2. توليد Service Worker برمجياً (لجعل الموقع يعمل كـ PWA)
+    const swCode = `
+        const CACHE_NAME = 'mysend-v1';
+        self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)));
+        self.addEventListener('fetch', e => {
+            e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+        });
+    `;
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(swBlob);
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Error:', err));
+    }
+
+    // 3. إعدادات الفايربيس (جاهزة بمفاتيحك الخاصة)
+    const firebaseConfig = {
+        apiKey: "AIzaSyBB_U4C880PW4GxZd8FALv8yBSiP2mNeBY",
+        authDomain: "malaboushi.firebaseapp.com",
+        databaseURL: "https://malaboushi-default-rtdb.firebaseio.com",
+        projectId: "malaboushi",
+        storageBucket: "malaboushi.appspot.com",
+        messagingSenderId: "110336819350",
+        appId: "1:110336819350:web:2b1b0488e72b811f0602b7"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // 4. منطق التطبيق
+    let remoteUrl = "";
+    let selectedFile = null;
+
+    function verifyPin() {
+        const pin = document.getElementById("pinInput").value.trim();
+        if (pin.length !== 4) {
+            showStatus("يرجى إدخال 4 أرقام", "#ff4444");
+            return;
+        }
+
+        document.getElementById("btnVerify").disabled = true;
+        showStatus("جاري البحث...", "#FFCA28");
+
+        database.ref("active_pins/" + pin).once('value').then((snapshot) => {
+            if (snapshot.exists()) {
+                remoteUrl = snapshot.val();
+                showStatus("تم الربط بنجاح!", "#00E676");
+                document.getElementById("step1").style.display = "none";
+                document.getElementById("step2").style.display = "block";
+            } else {
+                showStatus("رقم PIN غير صحيح أو منتهي", "#ff4444");
+                document.getElementById("btnVerify").disabled = false;
+            }
+        }).catch(err => {
+            showStatus("خطأ بالاتصال بالسيرفر", "#ff4444");
+            document.getElementById("btnVerify").disabled = false;
+        });
+    }
+
+    function showStatus(msg, color) {
+        const el = document.getElementById("statusText");
+        el.innerText = msg;
+        el.style.color = color;
+    }
+
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) {
+            selectedFile = e.target.files[0];
+            document.getElementById('fileName').innerText = "تم تحديد: " + selectedFile.name;
+            document.getElementById('fileName').style.color = "#00E676";
+            document.getElementById('btnSend').disabled = false;
+        }
+    });
+
+    function sendFile() {
+        if (!selectedFile) return;
+
+        let finalUrl = remoteUrl.endsWith("/") ? remoteUrl.slice(0, -1) : remoteUrl;
+        finalUrl += "/upload?filename=" + encodeURIComponent(selectedFile.name);
+        
+        const password = document.getElementById("passInput").value.trim();
+        
+        document.getElementById('btnSend').disabled = true;
+        document.getElementById('progressWrapper').style.display = "block";
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", finalUrl, true);
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
+
+        if (password !== "") {
+            xhr.setRequestHeader("Authorization", "Basic " + btoa("admin:" + password));
+        }
+
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById('progressBar').style.width = percent + "%";
+                document.getElementById('progressText').innerText = percent + "%";
+            }
+        };
+
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                alert("تم إرسال الملف بنجاح يا بطل!");
+                resetUploader();
+            } else if (xhr.status === 401) {
+                alert("فشل الإرسال: كلمة المرور غير صحيحة");
+                resetUploadUI();
+            } else {
+                alert("حدث خطأ في الخادم! الكود: " + xhr.status);
+                resetUploadUI();
+            }
+        };
+
+        xhr.onerror = function() {
+            alert("فشل الاتصال! تأكد من أن التطبيق يعمل ومفتوح على الهاتف.");
+            resetUploadUI();
+        };
+
+        xhr.send(selectedFile);
+    }
+
+    function resetUploadUI() {
+        document.getElementById('btnSend').disabled = false;
+        document.getElementById('progressWrapper').style.display = "none";
+        document.getElementById('progressBar').style.width = "0%";
+    }
+
+    function resetUploader() {
+        document.getElementById('fileInput').value = "";
+        selectedFile = null;
+        document.getElementById('fileName').innerText = "لم يتم اختيار أي ملف بعد";
+        document.getElementById('fileName').style.color = "#A0AABF";
+        resetUploadUI();
+        document.getElementById('btnSend').disabled = true;
+    }
+</script>
+</body>
+</html>
