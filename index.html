@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>إرسال عن بعد - MySend</title>
     <meta name="theme-color" content="#050515">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     
     <!-- مكتبات الفايربيس -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -183,9 +185,40 @@
             color: #00E676;
             font-weight: bold;
         }
+
+        /* ستايل الإشعار المنبثق (النافذة الأنيقة) */
+        .custom-toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 12px;
+            padding: 16px;
+            position: fixed;
+            z-index: 9999;
+            left: 50%;
+            top: 20px;
+            transform: translateX(-50%);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            font-size: 16px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.3s, top 0.3s, visibility 0.3s;
+        }
+        .custom-toast.show {
+            visibility: visible;
+            opacity: 1;
+            top: 40px;
+        }
+        .custom-toast.success { background: linear-gradient(90deg, #00E676, #00C853); color: #050515; }
+        .custom-toast.error { background: linear-gradient(90deg, #ff4444, #cc0000); color: white; }
     </style>
 </head>
 <body>
+
+<!-- عنصر الإشعار المنبثق -->
+<div id="customToast" class="custom-toast"></div>
 
 <div class="container">
     <div class="header">
@@ -221,42 +254,22 @@
 </div>
 
 <script>
-    // 1. توليد Manifest برمجياً بالاعتماد على أيقوناتك
-    const manifestObj = {
-        "name": "MySend Remote",
-        "short_name": "MySend",
-        "start_url": ".",
-        "display": "standalone",
-        "background_color": "#050515",
-        "theme_color": "#050515",
-        "orientation": "portrait",
-        "icons": [
-            { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-            { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
-        ]
-    };
-    const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/json' });
-    const manifestUrl = URL.createObjectURL(manifestBlob);
-    const linkManifest = document.createElement('link');
-    linkManifest.rel = 'manifest';
-    linkManifest.href = manifestUrl;
-    document.head.appendChild(linkManifest);
-
-    // 2. توليد Service Worker برمجياً (لجعل الموقع يعمل كـ PWA)
-    const swCode = `
-        const CACHE_NAME = 'mysend-v1';
-        self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)));
-        self.addEventListener('fetch', e => {
-            e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
-        });
-    `;
-    const swBlob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(swBlob);
+    // 1. تسجيل Service Worker الحقيقي (مطلوب لتثبيت التطبيق PWA)
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Error:', err));
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Error:', err));
+        });
     }
 
-    // 3. إعدادات الفايربيس (جاهزة بمفاتيحك الخاصة)
+    // دالة عرض الإشعارات الأنيقة
+    function showCustomToast(message, type) {
+        const toast = document.getElementById("customToast");
+        toast.innerText = message;
+        toast.className = "custom-toast show " + type;
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    }
+
+    // 2. إعدادات الفايربيس (جاهزة بمفاتيحك الخاصة)
     const firebaseConfig = {
         apiKey: "AIzaSyBB_U4C880PW4GxZd8FALv8yBSiP2mNeBY",
         authDomain: "malaboushi.firebaseapp.com",
@@ -270,7 +283,7 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // 4. منطق التطبيق
+    // 3. منطق التطبيق
     let remoteUrl = "";
     let selectedFile = null;
 
@@ -344,19 +357,19 @@
 
         xhr.onload = function() {
             if (xhr.status === 200) {
-                alert("تم إرسال الملف بنجاح يا بطل!");
+                showCustomToast("تم إرسال الملف بنجاح يا بطل!", "success");
                 resetUploader();
             } else if (xhr.status === 401) {
-                alert("فشل الإرسال: كلمة المرور غير صحيحة");
+                showCustomToast("فشل الإرسال: كلمة المرور غير صحيحة", "error");
                 resetUploadUI();
             } else {
-                alert("حدث خطأ في الخادم! الكود: " + xhr.status);
+                showCustomToast("حدث خطأ في الخادم! الكود: " + xhr.status, "error");
                 resetUploadUI();
             }
         };
 
         xhr.onerror = function() {
-            alert("فشل الاتصال! تأكد من أن التطبيق يعمل ومفتوح على الهاتف.");
+            showCustomToast("فشل الاتصال! تأكد من أن التطبيق مفتوح على الهاتف.", "error");
             resetUploadUI();
         };
 
