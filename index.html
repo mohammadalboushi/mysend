@@ -280,7 +280,7 @@
     let selectedFiles = [];
 
     // دالة فحص الـ PIN وتحديث حالة الاتصال
-    function verifyPin() {
+    async function verifyPin() {
         const pin = document.getElementById("pinInput").value.trim();
         if (pin.length !== 4) {
             showStatus("يرجى إدخال 4 أرقام", "#ff4444");
@@ -290,12 +290,13 @@
         document.getElementById("btnVerify").disabled = true;
         showStatus("جاري البحث...", "#FFCA28");
 
-        database.ref("active_pins/" + pin).once('value').then((snapshot) => {
+        try {
+            const snapshot = await database.ref("active_pins/" + pin).once('value');
             if (snapshot.exists()) {
                 verifiedPin = pin;
                 
-                // تحديث العداد على الهاتف/الشاشة فوراً
-                database.ref("active_pins/" + pin + "/is_connected").setValue(true);
+                // تحديث العداد على الهاتف/الشاشة فوراً (تم تصحيح دالة الرفع إلى set بدلاً من setValue)
+                await database.ref("active_pins/" + pin + "/is_connected").set(true);
                 // إزالة الاتصال عند إغلاق المتصفح أو انقطاع النت
                 database.ref("active_pins/" + pin + "/is_connected").onDisconnect().remove();
 
@@ -306,10 +307,12 @@
                 showStatus("رقم PIN غير صحيح أو غير متصل", "#ff4444");
                 document.getElementById("btnVerify").disabled = false;
             }
-        }).catch(err => {
-            showStatus("خطأ بالاتصال بالسيرفر", "#ff4444");
+        } catch (err) {
+            console.error("Firebase Error:", err);
+            // إظهار رسالة الخطأ الحقيقية القادمة من السيرفر لمعرفة السبب الدقيق
+            showStatus("فشل: " + err.message, "#ff4444");
             document.getElementById("btnVerify").disabled = false;
-        });
+        }
     }
 
     function showStatus(msg, color) {
