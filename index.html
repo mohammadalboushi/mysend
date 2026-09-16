@@ -76,11 +76,6 @@
             transition: all 0.3s ease;
         }
 
-        .card:hover {
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 30px 55px rgba(0, 230, 118, 0.1);
-        }
-
         label { 
             display: block; 
             color: #A0AABF; 
@@ -89,7 +84,7 @@
             font-weight: 700;
         }
         
-        input[type="text"], input[type="password"], input[type="tel"] {
+        input[type="tel"] {
             width: 100%;
             padding: 16px;
             background: rgba(0, 0, 0, 0.4);
@@ -133,7 +128,7 @@
             background: linear-gradient(90deg, #00E676, #00C853); 
             color: #050515; 
         }
-        .btn-green:hover { box-shadow: 0 0 15px rgba(0,230,118,0.5); transform: translateY(-2px); }
+        .btn-green:hover:not(:disabled) { box-shadow: 0 0 15px rgba(0,230,118,0.5); transform: translateY(-2px); }
         
         .btn-blue { 
             background: linear-gradient(90deg, #0057D9, #0044AD); 
@@ -148,7 +143,13 @@
         }
         .btn-yellow:hover:not(:disabled) { box-shadow: 0 0 15px rgba(255,202,40,0.5); transform: translateY(-2px); }
 
-        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        button:disabled, .file-btn.disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+            transform: none; 
+            box-shadow: none; 
+            pointer-events: none;
+        }
 
         input[type="file"] { display: none; }
         
@@ -186,7 +187,6 @@
             font-weight: bold;
         }
 
-        /* ستايل الإشعار المنبثق (النافذة الأنيقة) */
         .custom-toast {
             visibility: hidden;
             min-width: 250px;
@@ -217,12 +217,10 @@
 </head>
 <body>
 
-<!-- عنصر الإشعار المنبثق -->
 <div id="customToast" class="custom-toast"></div>
 
 <div class="container">
     <div class="header">
-        <!-- رح يستدعي الأيقونة تبعك مباشرة -->
         <img src="icon-192.png" alt="MySend Logo" onerror="this.style.display='none'">
         <h1>MySend Web</h1>
     </div>
@@ -237,11 +235,9 @@
 
     <!-- قسم الإرسال -->
     <div class="card" id="step2" style="display: none;">
-        <label>كلمة المرور (إن وجدت بالهاتف):</label>
-        <input type="password" id="passInput" placeholder="اتركه فارغاً إذا لم يكن هناك حماية">
-        
-        <label for="fileInput" class="file-btn btn-blue">اختر ملفاً للإرسال</label>
-        <input type="file" id="fileInput">
+        <!-- دعم تحديد ملفات متعددة (multiple) -->
+        <label for="fileInput" id="fileLabel" class="file-btn btn-blue">اختر الملفات للإرسال</label>
+        <input type="file" id="fileInput" multiple>
         <div id="fileName">لم يتم اختيار أي ملف بعد</div>
 
         <div class="progress-wrapper" id="progressWrapper">
@@ -249,27 +245,24 @@
             <div class="progress-text" id="progressText">0%</div>
         </div>
 
-        <button class="btn-yellow" id="btnSend" onclick="sendFile()" disabled>إرسال الآن</button>
+        <button class="btn-yellow" id="btnSend" onclick="sendAllFiles()" disabled>إرسال الآن</button>
     </div>
 </div>
 
 <script>
-    // 1. تسجيل Service Worker الحقيقي (مطلوب لتثبيت التطبيق PWA)
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Error:', err));
         });
     }
 
-    // دالة عرض الإشعارات الأنيقة
     function showCustomToast(message, type) {
         const toast = document.getElementById("customToast");
         toast.innerText = message;
         toast.className = "custom-toast show " + type;
-        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 4000);
     }
 
-    // 2. إعدادات الفايربيس (جاهزة بمفاتيحك الخاصة)
     const firebaseConfig = {
         apiKey: "AIzaSyBB_U4C880PW4GxZd8FALv8yBSiP2mNeBY",
         authDomain: "malaboushi.firebaseapp.com",
@@ -283,10 +276,10 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // 3. منطق التطبيق
-    let remoteUrl = "";
-    let selectedFile = null;
+    let verifiedPin = "";
+    let selectedFiles = [];
 
+    // دالة فحص الـ PIN وتحديث حالة الاتصال
     function verifyPin() {
         const pin = document.getElementById("pinInput").value.trim();
         if (pin.length !== 4) {
@@ -299,12 +292,18 @@
 
         database.ref("active_pins/" + pin).once('value').then((snapshot) => {
             if (snapshot.exists()) {
-                remoteUrl = snapshot.val();
+                verifiedPin = pin;
+                
+                // تحديث العداد على الهاتف/الشاشة فوراً
+                database.ref("active_pins/" + pin + "/is_connected").setValue(true);
+                // إزالة الاتصال عند إغلاق المتصفح أو انقطاع النت
+                database.ref("active_pins/" + pin + "/is_connected").onDisconnect().remove();
+
                 showStatus("تم الربط بنجاح!", "#00E676");
                 document.getElementById("step1").style.display = "none";
                 document.getElementById("step2").style.display = "block";
             } else {
-                showStatus("رقم PIN غير صحيح أو منتهي", "#ff4444");
+                showStatus("رقم PIN غير صحيح أو غير متصل", "#ff4444");
                 document.getElementById("btnVerify").disabled = false;
             }
         }).catch(err => {
@@ -320,75 +319,103 @@
     }
 
     document.getElementById('fileInput').addEventListener('change', function(e) {
-        if (e.target.files.length > 0) {
-            selectedFile = e.target.files[0];
-            document.getElementById('fileName').innerText = "تم تحديد: " + selectedFile.name;
+        selectedFiles = Array.from(e.target.files);
+        if (selectedFiles.length > 0) {
+            document.getElementById('fileName').innerText = "تم تحديد " + selectedFiles.length + " ملفات 📦";
             document.getElementById('fileName').style.color = "#00E676";
             document.getElementById('btnSend').disabled = false;
+        } else {
+            resetUploader();
         }
     });
 
-    function sendFile() {
-        if (!selectedFile) return;
+    // دالة رفع ملف واحد لسيرفر Supabase (كما في التطبيق)
+    function uploadToSupabase(file, fileIndex, totalFiles) {
+        return new Promise((resolve, reject) => {
+            const SUPA_URL = "https://boksjjglizmzmqoxzmhy.supabase.co";
+            const SUPA_KEY = "sb_publishable_Vil5AiRd1aZ6GwiHZUaNmg_N8I47i1y";
+            const cleanName = "web_" + Date.now() + "_" + file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+            const uploadUrl = SUPA_URL + "/storage/v1/object/chat-media/" + cleanName;
 
-        let finalUrl = remoteUrl.endsWith("/") ? remoteUrl.slice(0, -1) : remoteUrl;
-        finalUrl += "/upload?filename=" + encodeURIComponent(selectedFile.name);
-        
-        const password = document.getElementById("passInput").value.trim();
-        
-        document.getElementById('btnSend').disabled = true;
-        document.getElementById('progressWrapper').style.display = "block";
-        
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", finalUrl, true);
-        xhr.setRequestHeader("Content-Type", "application/octet-stream");
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", uploadUrl, true);
+            xhr.setRequestHeader("Authorization", "Bearer " + SUPA_KEY);
+            xhr.setRequestHeader("apikey", SUPA_KEY);
+            xhr.setRequestHeader("Content-Type", "application/octet-stream");
 
-        if (password !== "") {
-            xhr.setRequestHeader("Authorization", "Basic " + btoa("admin:" + password));
-        }
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressBar').style.width = percent + "%";
+                    document.getElementById('progressText').innerText = `جاري رفع (${fileIndex}/${totalFiles}): ${percent}%`;
+                }
+            };
 
-        xhr.upload.onprogress = function(e) {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                document.getElementById('progressBar').style.width = percent + "%";
-                document.getElementById('progressText').innerText = percent + "%";
-            }
-        };
+            xhr.onload = function() {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const publicUrl = SUPA_URL + "/storage/v1/object/public/chat-media/" + cleanName;
+                    resolve(publicUrl);
+                } else {
+                    reject("Supabase error: " + xhr.status);
+                }
+            };
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                showCustomToast("تم إرسال الملف بنجاح يا بطل!", "success");
-                resetUploader();
-            } else if (xhr.status === 401) {
-                showCustomToast("فشل الإرسال: كلمة المرور غير صحيحة", "error");
-                resetUploadUI();
-            } else {
-                showCustomToast("حدث خطأ في الخادم! الكود: " + xhr.status, "error");
-                resetUploadUI();
-            }
-        };
-
-        xhr.onerror = function() {
-            showCustomToast("فشل الاتصال! تأكد من أن التطبيق مفتوح على الهاتف.", "error");
-            resetUploadUI();
-        };
-
-        xhr.send(selectedFile);
+            xhr.onerror = () => reject("Network error");
+            xhr.send(file);
+        });
     }
 
-    function resetUploadUI() {
-        document.getElementById('btnSend').disabled = false;
-        document.getElementById('progressWrapper').style.display = "none";
-        document.getElementById('progressBar').style.width = "0%";
+    // الطابور (Queue) لإرسال الملفات بالترتيب
+    async function sendAllFiles() {
+        if (selectedFiles.length === 0) return;
+        
+        document.getElementById('btnSend').disabled = true;
+        document.getElementById('fileLabel').classList.add('disabled');
+        document.getElementById('progressWrapper').style.display = "block";
+        
+        let successCount = 0;
+        
+        for (let i = 0; i < selectedFiles.length; i++) {
+            const file = selectedFiles[i];
+            try {
+                // 1. رفع الملف لـ Supabase
+                const fileUrl = await uploadToSupabase(file, i + 1, selectedFiles.length);
+                
+                // 2. إرسال الرابط للشاشة عبر Firebase
+                await database.ref("active_pins/" + verifiedPin + "/incoming_files").push({
+                    name: file.name,
+                    url: fileUrl
+                });
+                successCount++;
+            } catch (err) {
+                console.error(err);
+                showCustomToast(`فشل إرسال الملف: ${file.name}`, "error");
+                // بنكمل عالي بعده وما بنوقف اللوب
+            }
+        }
+        
+        if (successCount === selectedFiles.length) {
+            showCustomToast("تم إرسال كافة الملفات بنجاح يا بطل! 🚀", "success");
+        } else if (successCount > 0) {
+            showCustomToast(`تم إرسال ${successCount} من أصل ${selectedFiles.length} ملفات.`, "success");
+        } else {
+            showCustomToast("فشل إرسال الملفات، تأكد من اتصال الإنترنت.", "error");
+        }
+        
+        resetUploader();
     }
 
     function resetUploader() {
         document.getElementById('fileInput').value = "";
-        selectedFile = null;
+        selectedFiles = [];
         document.getElementById('fileName').innerText = "لم يتم اختيار أي ملف بعد";
         document.getElementById('fileName').style.color = "#A0AABF";
-        resetUploadUI();
+        
         document.getElementById('btnSend').disabled = true;
+        document.getElementById('fileLabel').classList.remove('disabled');
+        
+        document.getElementById('progressWrapper').style.display = "none";
+        document.getElementById('progressBar').style.width = "0%";
     }
 </script>
 </body>
